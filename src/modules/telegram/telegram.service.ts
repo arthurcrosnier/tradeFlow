@@ -1,5 +1,6 @@
 // src/modules/telegram/telegram.service.ts
 import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
+import { BybitService } from '../bybit/bybit.service';
 import { ConfigService } from '@nestjs/config';
 import { TradingSignal } from './interfaces/signal.interface';
 import { v4 as uuidv4 } from 'uuid';
@@ -14,7 +15,10 @@ export class TelegramService implements OnModuleInit {
   private readonly logger = new Logger(TelegramService.name);
   private signals: TradingSignal[] = [];
 
-  constructor(private configService: ConfigService) {
+  constructor(
+    private configService: ConfigService,
+    private bybitService: BybitService,
+  ) {
     const apiId = Number(this.configService.get<string>('TELEGRAM_API_ID'));
     const apiHash = this.configService.get<string>('TELEGRAM_API_HASH');
     let session = '';
@@ -48,6 +52,9 @@ export class TelegramService implements OnModuleInit {
 
     try {
       const targetChannel = this.configService.get<string>('TELEGRAM_CHANNEL');
+      // const targetChannel = this.configService.get<string>(
+      //   'TELEGRAM_CHANNEL_TEST',
+      // );
       const channel = await this.client.getEntity(targetChannel);
       await this.client.getMessages(channel, {
         limit: 1,
@@ -58,27 +65,16 @@ export class TelegramService implements OnModuleInit {
           const eventIdString = String(event?.message.peerId?.channelId);
           const targetIdString = String(channel.id);
 
-          this.logger.log('Message event:', eventIdString);
-          this.logger.log('Message target:', targetIdString);
-          this.logger.log(eventIdString === targetIdString);
-
           if (eventIdString === targetIdString) {
             const message = event.message.message;
             if (message) {
-              this.logger.log(
-                `Message reçu du channel ${targetChannel}: ${message}`,
-              );
-              await this.storeMessage({
-                id: uuidv4(),
-                type: 'LONG',
-                symbol: 'UNKNOWN',
-                entryPrice: 0,
-                stopLoss: 0,
-                takeProfit: 0,
-                timestamp: new Date(),
-                processed: false,
-                rawMessage: message,
-              });
+              this.logger.log(`Nouveau message reçu: ${event.message.message}`);
+              const isBuySignal = message.includes('⚡💰 BOUGHT');
+              const isSellSignal = message.includes('⚡💰 SOLD');
+              if (isBuySignal || isSellSignal) {
+                this.logger.log(`Signal de trading détecté: ${message}`);
+                await this.handleTradingSignal(message, isBuySignal);
+              }
             }
           }
         }
@@ -89,6 +85,46 @@ export class TelegramService implements OnModuleInit {
       );
     } catch (error) {
       this.logger.error('Erreur de connexion au channel:', error);
+    }
+  }
+
+  private async handleTradingSignal(message: string, isBuySignal: boolean) {
+    try {
+      await this.bybitService.closeAllPositions();
+      const currentPrice = await this.bybitService.getBTCPrice();
+      const stopLoss = isBuySignal
+        ? currentPrice * 0.98 // -2% for long
+        : currentPrice * 1.02; // +2% for short
+      const takeProfit = isBuySignal
+        ? currentPrice * 1.04 // +4% for long
+        : currentPrice * 0.96; // -4% for short
+      this.logger.log(
+        `Ouverture de position: ${isBuySignal ? 'LONG' : 'SHORT'}`,
+      );
+
+      await this.bybitService.openPosition({
+        type: isBuySignal ? 'LONG' : 'SHORT',
+        symbol: 'BTCUSDT',
+        entryPrice: currentPrice,
+        stopLoss,
+        takeProfit,
+        portfolioPercentage: 20,
+        leverage: 1,
+      });
+
+      await this.storeMessage({
+        id: uuidv4(),
+        type: isBuySignal ? 'LONG' : 'SHORT',
+        symbol: 'BTCUSDT',
+        entryPrice: currentPrice,
+        stopLoss,
+        takeProfit,
+        timestamp: new Date(),
+        processed: true,
+        rawMessage: message,
+      });
+    } catch (error) {
+      this.logger.error('Erreur dans handleTradingSignal:', error);
     }
   }
 

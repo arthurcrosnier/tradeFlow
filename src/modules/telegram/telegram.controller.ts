@@ -7,7 +7,7 @@ import { SignalResponseDto } from './dto/signal.dto';
 export class TelegramController {
   constructor(private readonly telegramService: TelegramService) {}
 
-  @Get()
+  @Get('history')
   async getSignals(): Promise<SignalResponseDto[]> {
     return this.telegramService.getStoredSignals();
   }
