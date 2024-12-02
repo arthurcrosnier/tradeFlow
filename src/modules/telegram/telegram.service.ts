@@ -80,6 +80,11 @@ export class TelegramService implements OnModuleInit {
                 await this.handleTradingSignal(message, isBuySignal);
               }
             }
+          } else {
+            this.logger.log(
+              `Message reçu d'un channel inconnu: ${eventIdString} !== ${targetIdString}`,
+              `message : ${event.message.message}`,
+            );
           }
         }
       });
