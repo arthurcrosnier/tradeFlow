@@ -38,13 +38,17 @@ export class TelegramService implements OnModuleInit {
   }
 
   async onModuleInit() {
-    await this.client.start({
-      phoneNumber: async () => await input.text('Numéro de téléphone: '),
-      password: async () =>
-        await input.text('Mot de passe 2FA (si configuré): '),
-      phoneCode: async () => await input.text('Code reçu par SMS: '),
-      onError: (err) => console.log(err),
-    });
+    if (process.env.NODE_ENV === 'production') {
+      await this.client.connect();
+    } else {
+      await this.client.start({
+        phoneNumber: async () => await input.text('Numéro de téléphone: '),
+        password: async () =>
+          await input.text('Mot de passe 2FA (si configuré): '),
+        phoneCode: async () => await input.text('Code reçu par SMS: '),
+        onError: (err) => console.log(err),
+      });
+    }
 
     const session = this.client.session.save() as unknown as string;
     fs.writeFileSync('session.txt', session);
