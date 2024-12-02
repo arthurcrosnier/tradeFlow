@@ -8,6 +8,12 @@ services:
     environment:
       - NODE_ENV=production
       - REDIS_HOST=redis
+      - TELEGRAM_API_ID=${TELEGRAM_API_ID}
+      - TELEGRAM_API_HASH=${TELEGRAM_API_HASH}
+      - TELEGRAM_CHANNEL=${TELEGRAM_CHANNEL}
+      - BYBIT_API_KEY=${BYBIT_API_KEY}
+      - BYBIT_API_SECRET=${BYBIT_API_SECRET}
+      - BYBIT_TESTNET=${BYBIT_TESTNET}
     depends_on:
       - redis
 
