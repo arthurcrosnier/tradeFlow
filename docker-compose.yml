@@ -16,6 +16,11 @@ services:
       - BYBIT_TESTNET=${BYBIT_TESTNET}
     depends_on:
       - redis
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:3000/signals/history']
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   redis:
     image: redis:latest
