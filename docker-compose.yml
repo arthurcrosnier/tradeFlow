@@ -8,12 +8,17 @@ services:
     environment:
       - NODE_ENV=production
       - REDIS_HOST=redis
+      - REDIS_PORT=${REDIS_PORT}
+      - IS_TELEGRAM_TEST=${IS_TELEGRAM_TEST}
       - TELEGRAM_API_ID=${TELEGRAM_API_ID}
       - TELEGRAM_API_HASH=${TELEGRAM_API_HASH}
       - TELEGRAM_CHANNEL=${TELEGRAM_CHANNEL}
+      - TELEGRAM_CHANNEL_TEST=${TELEGRAM_CHANNEL_TEST}
       - BYBIT_API_KEY=${BYBIT_API_KEY}
       - BYBIT_API_SECRET=${BYBIT_API_SECRET}
       - BYBIT_TESTNET=${BYBIT_TESTNET}
+      - ADMIN_PASSWORD_HASH=${ADMIN_PASSWORD_HASH}
+      - JWT_SECRET=${JWT_SECRET}
     depends_on:
       - redis
     healthcheck:
