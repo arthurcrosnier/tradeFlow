@@ -7,7 +7,13 @@ import * as cookieParser from 'cookie-parser';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
-  app.useStaticAssets(join(__dirname, '..', '..', 'public'));
+  if (process.env.NODE_ENV === 'development') {
+    console.log('Development mode');
+    app.useStaticAssets(join(__dirname, '..', '..', 'public'));
+  } else {
+    app.useStaticAssets(join(process.cwd(), 'dist', 'public'));
+  }
+
   app.enableCors();
   app.use(cookieParser());
   const port = process.env.PORT || 3000;
