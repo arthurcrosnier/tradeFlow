@@ -40,6 +40,8 @@ export class AuthController {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       maxAge: 72 * 60 * 60 * 1000, // 72h
+      domain:
+        process.env.NODE_ENV === 'production' ? '15.188.51.178' : undefined,
     });
 
     return { status: 'success' };
