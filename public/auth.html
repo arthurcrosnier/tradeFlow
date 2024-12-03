@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Authentication</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        margin: 0;
+        background-color: #f5f5f5;
+      }
+
+      .container {
+        background-color: white;
+        padding: 2rem;
+        border-radius: 8px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        width: 100%;
+        max-width: 400px;
+      }
+
+      h1 {
+        text-align: center;
+        color: #333;
+        margin-bottom: 2rem;
+      }
+
+      .form-group {
+        margin-bottom: 1rem;
+      }
+
+      input {
+        width: 100%;
+        padding: 0.5rem;
+        margin-bottom: 1rem;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        box-sizing: border-box;
+      }
+
+      button {
+        width: 100%;
+        padding: 0.75rem;
+        background-color: #007bff;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+
+      button:hover {
+        background-color: #0056b3;
+      }
+
+      .error {
+        color: red;
+        margin-top: 1rem;
+        text-align: center;
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Authentification</h1>
+      <form id="authForm">
+        <div class="form-group">
+          <input
+            type="password"
+            id="password"
+            placeholder="Mot de passe"
+            required
+          />
+        </div>
+        <button type="submit">Se connecter</button>
+      </form>
+      <div id="error" class="error"></div>
+    </div>
+
+    <script>
+      document
+        .getElementById('authForm')
+        .addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const password = document.getElementById('password').value;
+          const error = document.getElementById('error');
+
+          try {
+            const response = await fetch('/auth/login', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ password }),
+            });
+
+            const data = await response.json();
+
+            if (response.ok && data.status === 'success') {
+              window.location.href = '/login_telegram.html';
+            } else {
+              throw new Error(data.message || "Erreur d'authentification");
+            }
+          } catch (err) {
+            error.textContent = err.message;
+            error.style.display = 'block';
+          }
+        });
+    </script>
+  </body>
+</html>

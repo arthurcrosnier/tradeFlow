@@ -12,8 +12,11 @@ import * as fs from 'fs';
 @Injectable()
 export class TelegramService implements OnModuleInit {
   private client: TelegramClient;
+  private loginPhoneNumber: string | null = null;
+  private waitingForCode = false;
   private readonly logger = new Logger(TelegramService.name);
   private signals: TradingSignal[] = [];
+  private readonly SESSION_FILE = 'session.txt';
 
   constructor(
     private configService: ConfigService,
@@ -21,80 +24,121 @@ export class TelegramService implements OnModuleInit {
   ) {
     const apiId = Number(this.configService.get<string>('TELEGRAM_API_ID'));
     const apiHash = this.configService.get<string>('TELEGRAM_API_HASH');
-    let session = '';
-    try {
-      session = fs.readFileSync('session.txt', 'utf8');
-    } catch (error) {
-      this.logger.log(
-        "Pas de session existante, création d'une nouvelle session",
-      );
-    }
 
-    const stringSession = new StringSession(session);
-
-    this.client = new TelegramClient(stringSession, apiId, apiHash, {
+    this.client = new TelegramClient(new StringSession(''), apiId, apiHash, {
       connectionRetries: 5,
+      deviceModel: 'Server',
+      systemVersion: 'NodeJS',
+      appVersion: '1.0.0',
     });
   }
 
   async onModuleInit() {
-    if (process.env.NODE_ENV === 'production') {
-      await this.client.connect();
-    } else {
-      await this.client.start({
-        phoneNumber: async () => await input.text('Numéro de téléphone: '),
-        password: async () =>
-          await input.text('Mot de passe 2FA (si configuré): '),
-        phoneCode: async () => await input.text('Code reçu par SMS: '),
-        onError: (err) => console.log(err),
-      });
-    }
+    this.logger.log(
+      'Service Telegram initialisé, utilisez /telegram/login pour vous connecter',
+    );
+  }
 
-    const session = this.client.session.save() as unknown as string;
-    fs.writeFileSync('session.txt', session);
-    this.logger.log('Client Telegram connecté');
+  async getConnectionStatus() {
+    return {
+      connected: this.client?.connected || false,
+      waitingForCode: this.waitingForCode,
+      loginPhoneNumber: this.loginPhoneNumber,
+    };
+  }
+
+  async initiateLogin(phoneNumber: string) {
+    try {
+      this.loginPhoneNumber = phoneNumber;
+      this.waitingForCode = true;
+
+      await this.client.connect();
+      await this.client.sendCode(
+        {
+          apiId: Number(this.configService.get<string>('TELEGRAM_API_ID')),
+          apiHash: this.configService.get<string>('TELEGRAM_API_HASH'),
+        },
+        phoneNumber,
+      );
+
+      return {
+        status: 'waiting_for_code',
+        phoneNumber: this.loginPhoneNumber,
+      };
+    } catch (error) {
+      this.logger.error('Erreur initiation login:', error);
+      this.waitingForCode = false;
+      this.loginPhoneNumber = null;
+      throw error;
+    }
+  }
+
+  async verifyCode(code: string) {
+    if (!this.waitingForCode) {
+      throw new Error('Aucune demande de code en attente');
+    }
 
     try {
-      const targetChannel = this.configService.get<string>('TELEGRAM_CHANNEL');
-      // const targetChannel = this.configService.get<string>(
-      //   'TELEGRAM_CHANNEL_TEST',
-      // );
-      const channel = await this.client.getEntity(targetChannel);
-      await this.client.getMessages(channel, {
-        limit: 1,
+      await this.client.start({
+        phoneNumber: async () => this.loginPhoneNumber,
+        phoneCode: async () => code,
+        password: async () => '',
+        onError: (err) => {
+          this.logger.error('Erreur connexion:', err);
+          throw err;
+        },
       });
 
-      this.client.addEventHandler(async (event: any) => {
-        if (event.message) {
-          const eventIdString = String(event?.message.peerId?.channelId);
-          const targetIdString = String(channel.id);
+      this.waitingForCode = false;
+      this.loginPhoneNumber = null;
 
-          if (eventIdString === targetIdString) {
-            const message = event.message.message;
-            if (message) {
-              this.logger.log(`Nouveau message reçu: ${event.message.message}`);
-              const isBuySignal = message.includes('⚡💰 BOUGHT');
-              const isSellSignal = message.includes('⚡💰 SOLD');
-              if (isBuySignal || isSellSignal) {
-                this.logger.log(`Signal de trading détecté: ${message}`);
-                await this.handleTradingSignal(message, isBuySignal);
-              }
+      // Une fois connecté, configurer le handler de messages
+      await this.setupMessageHandler();
+
+      return {
+        status: 'connected',
+      };
+    } catch (error) {
+      this.logger.error('Erreur vérification code:', error);
+      throw error;
+    }
+  }
+
+  private async setupMessageHandler() {
+    if (!this.client?.connected) {
+      throw new Error('Client non connecté');
+    }
+
+    const isTest =
+      this.configService.get<string>('IS_TELEGRAM_TEST') === 'true';
+    const targetChannel = isTest
+      ? this.configService.get<string>('TELEGRAM_CHANNEL_TEST')
+      : this.configService.get<string>('TELEGRAM_CHANNEL');
+    const channel = await this.client.getEntity(targetChannel);
+
+    this.client.addEventHandler(async (event: any) => {
+      if (event.message) {
+        const eventIdString = String(event?.message.peerId?.channelId);
+        const targetIdString = String(channel.id);
+
+        if (eventIdString === targetIdString) {
+          const message = event.message.message;
+          if (message) {
+            this.logger.log(`Nouveau message reçu: ${message}`);
+            const isBuySignal = message.includes('⚡💰 BOUGHT');
+            const isSellSignal = message.includes('⚡💰 SOLD');
+            if (isBuySignal || isSellSignal) {
+              this.logger.log(`Signal de trading détecté: ${message}`);
+              await this.handleTradingSignal(message, isBuySignal);
             }
-          } else {
-            this.logger.log(
-              `Message reçu d'un channel inconnu: ${eventIdString} !== ${targetIdString}`,
-              `message : ${event.message.message}`,
-            );
           }
         }
-      });
+      }
+    });
 
-      this.logger.log(
-        `Connecté au channel ${targetChannel} et à l'écoute des messages`,
-      );
-    } catch (error) {
-      this.logger.error('Erreur de connexion au channel:', error);
-    }
+    this.logger.log(
+      `Handler de messages configuré pour le channel ${targetChannel}`,
+    );
   }
 
   private async handleTradingSignal(message: string, isBuySignal: boolean) {
