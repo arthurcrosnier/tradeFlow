@@ -36,9 +36,13 @@ export class AuthController {
       { expiresIn: '72h' },
     );
 
+    /***
+      todo: set the secure flag to true in production
+    ***/
     response.cookie('auth_token', token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      // secure: process.env.NODE_ENV === 'production',
+      secure: false,
       maxAge: 72 * 60 * 60 * 1000, // 72h
     });
 
