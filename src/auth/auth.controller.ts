@@ -33,15 +33,13 @@ export class AuthController {
     const token = jwt.sign(
       { isAdmin: true },
       this.configService.get<string>('JWT_SECRET'),
-      { expiresIn: '24h' },
+      { expiresIn: '72h' },
     );
 
     response.cookie('auth_token', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       maxAge: 72 * 60 * 60 * 1000, // 72h
-      domain:
-        process.env.NODE_ENV === 'production' ? '15.188.51.178' : undefined,
     });
 
     return { status: 'success' };
