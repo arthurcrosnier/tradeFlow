@@ -1,0 +1,262 @@
+<!-- public/config.html -->
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Configuration Manager</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        background-color: #f5f5f5;
+        margin: 0;
+        padding: 20px;
+      }
+
+      .container {
+        max-width: 800px;
+        margin: 0 auto;
+        background-color: white;
+        padding: 2rem;
+        border-radius: 8px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      }
+
+      h1 {
+        color: #333;
+        margin-bottom: 1.5rem;
+      }
+
+      .config-section {
+        margin-bottom: 2rem;
+      }
+
+      .config-group {
+        margin-bottom: 1rem;
+      }
+
+      label {
+        display: block;
+        margin-bottom: 0.5rem;
+        color: #666;
+        font-weight: bold;
+      }
+
+      input,
+      select {
+        width: 100%;
+        padding: 0.5rem;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        box-sizing: border-box;
+        margin-bottom: 0.5rem;
+      }
+
+      button {
+        padding: 0.75rem 1.5rem;
+        background-color: #0088cc;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 1rem;
+      }
+
+      button:hover {
+        background-color: #006699;
+      }
+
+      .error {
+        color: red;
+        margin-top: 0.5rem;
+      }
+
+      .success {
+        color: green;
+        margin-top: 0.5rem;
+      }
+
+      .config-json {
+        background-color: #f8f8f8;
+        padding: 1rem;
+        border-radius: 4px;
+        margin-bottom: 1rem;
+        font-family: monospace;
+        white-space: pre-wrap;
+      }
+
+      #currentConfig {
+        margin-bottom: 2rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Gestionnaire de Configuration</h1>
+
+      <div id="currentConfig">
+        <h2>Configuration Actuelle</h2>
+        <div class="config-json"></div>
+      </div>
+
+      <div class="config-section">
+        <h2>Telegram</h2>
+        <div class="config-group">
+          <label>Canal Production</label>
+          <input type="text" id="telegramProdChannel" />
+
+          <label>Canal Test</label>
+          <input type="text" id="telegramTestChannel" />
+
+          <label>Signal d'achat</label>
+          <input type="text" id="buySignal" />
+
+          <label>Signal de vente</label>
+          <input type="text" id="sellSignal" />
+        </div>
+      </div>
+
+      <div class="config-section">
+        <h2>Trading</h2>
+        <div class="config-group">
+          <label>Paire par défaut</label>
+          <input type="text" id="defaultPair" />
+
+          <label>Pourcentage du portfolio (%)</label>
+          <input type="number" id="portfolioPercentage" />
+
+          <label>Levier</label>
+          <input type="number" id="leverage" />
+
+          <label>Stop Loss Long (%)</label>
+          <input type="number" id="stopLossLong" />
+
+          <label>Stop Loss Short (%)</label>
+          <input type="number" id="stopLossShort" />
+
+          <label>Take Profit Long (%)</label>
+          <input type="number" id="takeProfitLong" />
+
+          <label>Take Profit Short (%)</label>
+          <input type="number" id="takeProfitShort" />
+        </div>
+      </div>
+
+      <button onclick="updateConfig()">Mettre à jour la configuration</button>
+      <div id="error" class="error hidden"></div>
+      <div id="success" class="success hidden"></div>
+    </div>
+
+    <script>
+      async function loadCurrentConfig() {
+        try {
+          const response = await fetch('/config');
+          const config = await response.json();
+
+          document.querySelector('#currentConfig .config-json').textContent =
+            JSON.stringify(config, null, 2);
+
+          // Remplir les champs avec les valeurs actuelles
+          document.getElementById('telegramProdChannel').value =
+            config.telegram.channels.production;
+          document.getElementById('telegramTestChannel').value =
+            config.telegram.channels.test;
+          document.getElementById('buySignal').value =
+            config.telegram.signals.buy;
+          document.getElementById('sellSignal').value =
+            config.telegram.signals.sell;
+
+          document.getElementById('defaultPair').value =
+            config.trading.pairs.default;
+          document.getElementById('portfolioPercentage').value =
+            config.trading.position.portfolioPercentage;
+          document.getElementById('leverage').value =
+            config.trading.position.leverage;
+          document.getElementById('stopLossLong').value =
+            config.trading.stopLoss.long;
+          document.getElementById('stopLossShort').value =
+            config.trading.stopLoss.short;
+          document.getElementById('takeProfitLong').value =
+            config.trading.takeProfit.long;
+          document.getElementById('takeProfitShort').value =
+            config.trading.takeProfit.short;
+        } catch (error) {
+          showError(
+            'Erreur lors du chargement de la configuration : ' + error.message,
+          );
+        }
+      }
+
+      async function updateConfig() {
+        const newConfig = {
+          telegram: {
+            channels: {
+              production: document.getElementById('telegramProdChannel').value,
+              test: document.getElementById('telegramTestChannel').value,
+            },
+            signals: {
+              buy: document.getElementById('buySignal').value,
+              sell: document.getElementById('sellSignal').value,
+            },
+          },
+          trading: {
+            pairs: {
+              default: document.getElementById('defaultPair').value,
+              allowed: [document.getElementById('defaultPair').value],
+            },
+            position: {
+              portfolioPercentage: Number(
+                document.getElementById('portfolioPercentage').value,
+              ),
+              leverage: Number(document.getElementById('leverage').value),
+            },
+            stopLoss: {
+              long: Number(document.getElementById('stopLossLong').value),
+              short: Number(document.getElementById('stopLossShort').value),
+            },
+            takeProfit: {
+              long: Number(document.getElementById('takeProfitLong').value),
+              short: Number(document.getElementById('takeProfitShort').value),
+            },
+          },
+        };
+
+        try {
+          const response = await fetch('/config', {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(newConfig),
+          });
+
+          if (response.ok) {
+            showSuccess('Configuration mise à jour avec succès');
+            loadCurrentConfig();
+          } else {
+            throw new Error('Erreur lors de la mise à jour');
+          }
+        } catch (error) {
+          showError('Erreur : ' + error.message);
+        }
+      }
+
+      function showError(message) {
+        const error = document.getElementById('error');
+        error.textContent = message;
+        error.classList.remove('hidden');
+        setTimeout(() => error.classList.add('hidden'), 5000);
+      }
+
+      function showSuccess(message) {
+        const success = document.getElementById('success');
+        success.textContent = message;
+        success.classList.remove('hidden');
+        setTimeout(() => success.classList.add('hidden'), 5000);
+      }
+
+      // Charger la configuration au chargement de la page
+      document.addEventListener('DOMContentLoaded', loadCurrentConfig);
+    </script>
+  </body>
+</html>

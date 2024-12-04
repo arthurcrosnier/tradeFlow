@@ -59,9 +59,45 @@ export class BybitService {
         }
       }
 
-      this.logger.log(`Toutes les positions ${symbol} fermées`);
+      this.logger.log(`All positions ${symbol} closed`);
     } catch (error) {
-      this.logger.error('Erreur fermeture positions:', error);
+      this.logger.error('Error closing all positions:', error);
+      throw error;
+    }
+  }
+
+  async closePositionsByCoin(coin: string): Promise<void> {
+    try {
+      const symbol = `${coin.toUpperCase()}`;
+
+      const positions = await this.client.getPositionInfo({
+        category: 'linear',
+        symbol,
+        settleCoin: 'USDT',
+      });
+
+      let positionsClosed = 0;
+      for (const position of positions.result.list) {
+        if (position.size !== '0') {
+          await this.client.submitOrder({
+            category: 'linear',
+            symbol,
+            side: position.side === 'Buy' ? 'Sell' : 'Buy',
+            orderType: 'Market',
+            qty: Math.abs(parseFloat(position.size)).toString(),
+            reduceOnly: true,
+          });
+          positionsClosed++;
+        }
+      }
+
+      if (positionsClosed > 0) {
+        this.logger.log(`${positionsClosed} positions ${symbol} closed`);
+      } else {
+        this.logger.log(`No positions to close for ${symbol}`);
+      }
+    } catch (error) {
+      this.logger.error(`Error closing positions for ${coin}:`, error);
       throw error;
     }
   }
@@ -74,7 +110,7 @@ export class BybitService {
       });
       return parseFloat(ticker.result.list[0].lastPrice);
     } catch (error) {
-      this.logger.error('Erreur récupération prix BTC:', error);
+      this.logger.error('Error getting BTC price:', error);
       throw error;
     }
   }
@@ -87,7 +123,7 @@ export class BybitService {
       });
       return parseFloat(wallet.result.list[0].totalEquity);
     } catch (error) {
-      this.logger.error('Erreur récupération valeur portfolio:', error);
+      this.logger.error('Error getting portfolio value:', error);
       throw error;
     }
   }
@@ -165,7 +201,7 @@ export class BybitService {
         return bybitOrder;
       }
     } catch (error) {
-      this.logger.error('Erreur ouverture position:', error);
+      this.logger.error('Error opening position:', error);
       throw error;
     }
   }

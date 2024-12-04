@@ -6,8 +6,7 @@ import { TradingSignal } from './interfaces/signal.interface';
 import { v4 as uuidv4 } from 'uuid';
 import { TelegramClient } from 'telegram';
 import { StringSession } from 'telegram/sessions';
-import input from 'input';
-import * as fs from 'fs';
+import { RedisService } from '../../database/redis.service';
 
 @Injectable()
 export class TelegramService implements OnModuleInit {
@@ -16,11 +15,11 @@ export class TelegramService implements OnModuleInit {
   private waitingForCode = false;
   private readonly logger = new Logger(TelegramService.name);
   private signals: TradingSignal[] = [];
-  private readonly SESSION_FILE = 'session.txt';
 
   constructor(
     private configService: ConfigService,
     private bybitService: BybitService,
+    private redisService: RedisService,
   ) {
     const apiId = Number(this.configService.get<string>('TELEGRAM_API_ID'));
     const apiHash = this.configService.get<string>('TELEGRAM_API_HASH');
@@ -91,8 +90,6 @@ export class TelegramService implements OnModuleInit {
 
       this.waitingForCode = false;
       this.loginPhoneNumber = null;
-
-      // Une fois connecté, configurer le handler de messages
       await this.setupMessageHandler();
 
       return {
@@ -109,11 +106,12 @@ export class TelegramService implements OnModuleInit {
       throw new Error('Client non connecté');
     }
 
+    const conf = await this.redisService.getConfig();
     const isTest =
       this.configService.get<string>('IS_TELEGRAM_TEST') === 'true';
     const targetChannel = isTest
-      ? this.configService.get<string>('TELEGRAM_CHANNEL_TEST')
-      : this.configService.get<string>('TELEGRAM_CHANNEL');
+      ? conf.telegram.channels.test
+      : conf.telegram.channels.production;
     const channel = await this.client.getEntity(targetChannel);
 
     this.client.addEventHandler(async (event: any) => {
@@ -124,9 +122,14 @@ export class TelegramService implements OnModuleInit {
         if (eventIdString === targetIdString) {
           const message = event.message.message;
           if (message) {
+            const currentConfig = await this.redisService.getConfig();
             this.logger.log(`Nouveau message reçu: ${message}`);
-            const isBuySignal = message.includes('⚡💰 BOUGHT');
-            const isSellSignal = message.includes('⚡💰 SOLD');
+            const isBuySignal = message.includes(
+              currentConfig.telegram.signals.buy,
+            );
+            const isSellSignal = message.includes(
+              currentConfig.telegram.signals.sell,
+            );
             if (isBuySignal || isSellSignal) {
               this.logger.log(`Signal de trading détecté: ${message}`);
               await this.handleTradingSignal(message, isBuySignal);
@@ -143,14 +146,21 @@ export class TelegramService implements OnModuleInit {
 
   private async handleTradingSignal(message: string, isBuySignal: boolean) {
     try {
-      await this.bybitService.closeAllPositions();
+      const currentConfig = await this.redisService.getConfig();
+      // await this.bybitService.closeAllPositions();
+      await this.bybitService.closePositionsByCoin(
+        currentConfig.trading.pairs.default,
+      );
       const currentPrice = await this.bybitService.getBTCPrice();
-      const stopLoss = isBuySignal
-        ? currentPrice * 0.98 // -2% for long
-        : currentPrice * 1.02; // +2% for short
-      const takeProfit = isBuySignal
-        ? currentPrice * 1.04 // +4% for long
-        : currentPrice * 0.96; // -4% for short
+      const stopLossPercent = isBuySignal
+        ? currentConfig.trading.stopLoss.long
+        : currentConfig.trading.stopLoss.short;
+      const takeProfitPercent = isBuySignal
+        ? currentConfig.trading.takeProfit.long
+        : currentConfig.trading.takeProfit.short;
+
+      const stopLoss = currentPrice * (1 + stopLossPercent / 100);
+      const takeProfit = currentPrice * (1 + takeProfitPercent / 100);
       this.logger.log(
         `Ouverture de position: ${isBuySignal ? 'LONG' : 'SHORT'}`,
       );
@@ -161,14 +171,14 @@ export class TelegramService implements OnModuleInit {
         entryPrice: currentPrice,
         stopLoss,
         takeProfit,
-        portfolioPercentage: 20,
-        leverage: 1,
+        portfolioPercentage: currentConfig.trading.position.portfolioPercentage,
+        leverage: currentConfig.trading.position.leverage,
       });
 
       await this.storeMessage({
         id: uuidv4(),
         type: isBuySignal ? 'LONG' : 'SHORT',
-        symbol: 'BTCUSDT',
+        symbol: currentConfig.trading.pairs.default,
         entryPrice: currentPrice,
         stopLoss,
         takeProfit,
