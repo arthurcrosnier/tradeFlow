@@ -5,6 +5,7 @@ import { TelegramModule } from './modules/telegram/telegram.module';
 import { AuthModule } from './auth/auth.module';
 import { AuthMiddleware } from './middleware/auth.middleware';
 import { AppConfigModule } from './modules/config/app.module.config';
+import { BinanceModule } from './modules/binance/binance.module';
 
 @Module({
   imports: [
@@ -12,14 +13,7 @@ import { AppConfigModule } from './modules/config/app.module.config';
     TelegramModule,
     AuthModule,
     AppConfigModule,
+    BinanceModule,
   ],
 })
 export class AppModule {}
-// export class AppModule implements NestModule {
-//   configure(consumer: MiddlewareConsumer) {
-//     consumer
-//       .apply(AuthMiddleware)
-//       .exclude('/auth/login', '/auth.html', '/login_telegram.html')
-//       .forRoutes('signals');
-//   }
-// }
